@@ -4,6 +4,7 @@ import streamlit as st
 import pandas as pd
 from folium.plugins import HeatMap
 
+MONTREAL_CENTER = [45.5017, -73.5673]
 
 # Streamlit configuration
 st.set_page_config(layout="wide")
@@ -21,9 +22,25 @@ data = data.sort_values(by="DATE")
 
 
 # Add filters
-filter_values = st.sidebar.multiselect("Select type of Crimes", data["CATEGORIE"].unique())
-year_values = st.sidebar.multiselect("Select Years", data["DATE"].dt.year.unique())
-month_values = st.sidebar.multiselect("Select Months", data["DATE"].dt.month.unique())
+crime_options = sorted(data["CATEGORIE"].dropna().unique())
+year_options = sorted(data["DATE"].dt.year.dropna().unique())
+month_options = list(range(1, 13))
+
+filter_values = st.sidebar.multiselect(
+    "Select type of Crimes",
+    crime_options,
+    default=crime_options,
+)
+year_values = st.sidebar.multiselect(
+    "Select Years",
+    year_options,
+    default=year_options,
+)
+month_values = st.sidebar.multiselect(
+    "Select Months",
+    month_options,
+    default=month_options,
+)
 
 # Apply filters
 filtered_data = data[data["CATEGORIE"].isin(filter_values)&
@@ -36,18 +53,36 @@ filtered_data = data[data["CATEGORIE"].isin(filter_values)&
 
 # Create a map object
 if len(filtered_data) > 0:
-    map = folium.Map(location=[filtered_data["LATITUDE"].mean(skipna=True), filtered_data["LONGITUDE"].mean(skipna=True)], zoom_start=13, tiles='Stamen Terrain')
+    map_center = [
+        filtered_data["LATITUDE"].mean(skipna=True),
+        filtered_data["LONGITUDE"].mean(skipna=True),
+    ]
 
 else:
     # If there are no non-NaN values, set a default location (e.g., city center)
-    map = folium.Map(location=[45.5017, -73.5673], zoom_start=13, tiles='Stamen Terrain' )
+    map_center = MONTREAL_CENTER
+
+map = folium.Map(location=map_center, zoom_start=11, tiles="CartoDB positron")
 
 # Create a heatmap layer
-heat_data = filtered_data[['LATITUDE', 'LONGITUDE']]
-heat_data = heat_data.dropna()  # Drop any remaining NaN values
+heat_data = (
+    filtered_data[["LATITUDE", "LONGITUDE"]]
+    .dropna()
+    .values
+    .tolist()
+)
 
-# Add the heatmap layer to the map
-HeatMap(heat_data).add_to(map)
+if heat_data:
+    # Add the heatmap layer to the map
+    HeatMap(
+        heat_data,
+        radius=16,
+        blur=18,
+        min_opacity=0.35,
+        max_zoom=13,
+    ).add_to(map)
+else:
+    st.warning("No crimes match the selected filters.")
 
 # Display the map
 folium_static(map)
